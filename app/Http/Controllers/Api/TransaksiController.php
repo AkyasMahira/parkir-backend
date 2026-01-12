@@ -90,7 +90,6 @@ class TransaksiController extends Controller
                     $query->where('plat_nomor', $request->plat_nomor);
                 }
 
-                // Lock baris transaksi agar tidak diproses ganda
                 $transaksi = $query->lockForUpdate()->first();
 
                 if (!$transaksi) {
@@ -100,14 +99,17 @@ class TransaksiController extends Controller
                 $waktuMasuk = Carbon::parse($transaksi->waktu_masuk);
                 $waktuKeluar = Carbon::now();
 
-                $durasiJam = $waktuMasuk->diffInHours($waktuKeluar);
-                if ($waktuMasuk->diffInMinutes($waktuKeluar) % 60 > 0 || $durasiJam == 0) {
-                    $durasiJam++;
+                $selisihMenit = $waktuMasuk->diffInMinutes($waktuKeluar);
+
+                if ($selisihMenit <= 0) {
+                    $durasiJam = 1; // Minimal 1 jam meskipun baru masuk
+                } else {
+                    $durasiJam = ceil($selisihMenit / 60);
                 }
 
                 $tarifMaster = Tarif::where('jenis_kendaraan', $transaksi->jenis_kendaraan)->first();
                 $hargaPerJam = $tarifMaster ? $tarifMaster->tarif_per_jam : 0;
-                $totalBiaya = $durasiJam * $hargaPerJam;
+                $totalBiaya = (int) ($durasiJam * $hargaPerJam);
 
                 $transaksi->update([
                     'waktu_keluar' => $waktuKeluar,
