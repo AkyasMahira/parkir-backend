@@ -10,7 +10,7 @@ use Illuminate\Validation\Rule;
 
 class UserController extends Controller
 {
-    // GET User
+    // GET
     public function index()
     { 
         $users = User::orderBy('id_user', 'desc')->get();
@@ -21,7 +21,7 @@ class UserController extends Controller
         ]);
     }
 
-    // POST User 
+    // POST 
     public function store(Request $request)
     {
         $request->validate([
@@ -46,7 +46,7 @@ class UserController extends Controller
         ], 201);
     }
 
-    // PUT User 
+    // PUT 
     public function update(Request $request, $id)
     {
         $user = User::find($id);
@@ -83,7 +83,7 @@ class UserController extends Controller
         ]);
     }
 
-    // DELETE Hapus User
+    // DELETE
     public function destroy($id)
     {
         $user = User::find($id);
