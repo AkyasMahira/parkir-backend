@@ -2,11 +2,16 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class Tarif extends Model
+class LogAktivitas extends Model
 {
-    protected $table = 'tb_tarif';
-    protected $primaryKey = 'id_tarif';
-    protected $fillable = ['jenis_kendaraan', 'tarif_per_jam'];
+    use HasFactory;
+
+    protected $table = 'tb_log_aktivitas';
+    protected $primaryKey = 'id_log';
+    protected $fillable = ['id_user', 'aktivitas', 'waktu_aktivitas'];
+
+    public $timestamps = true;
 }

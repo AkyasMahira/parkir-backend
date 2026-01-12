@@ -22,4 +22,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // CRUD Area Parkir
     Route::apiResource('areas', AreaParkirController::class);
+
+    // Transaksi
+    Route::post('/parking/in', [\App\Http\Controllers\Api\TransaksiController::class, 'store']);   
+    Route::post('/parking/out', [\App\Http\Controllers\Api\TransaksiController::class, 'update']); 
+    Route::get('/parking', [\App\Http\Controllers\Api\TransaksiController::class, 'index']);      
 });
