@@ -13,11 +13,17 @@ return new class extends Migration
     {
         Schema::create('tb_kendaraan', function (Blueprint $table) {
             $table->id('id_kendaraan');
-            $table->unsignedBigInteger('id_user')->nullable(); 
-            $table->string('plat_nomor', 15)->unique();
-            $table->string('jenis_kendaraan', 20);
-            $table->string('pemilik', 50)->nullable();
+            $table->unsignedBigInteger('id_user');
+            $table->string('plat_nomor', 15)->unique(); 
+            $table->string('jenis_kendaraan', 20); 
+            $table->string('merk', 50)->nullable(); 
+            $table->string('warna', 30)->nullable(); 
+            $table->string('pemilik', 100)->nullable(); 
+
             $table->timestamps();
+
+            // Foreign Key
+            $table->foreign('id_user')->references('id_user')->on('tb_user')->onDelete('cascade');
         });
     }
 

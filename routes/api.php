@@ -3,7 +3,9 @@
 use App\Http\Controllers\Api\AreaParkirController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\MemberController;
 use App\Http\Controllers\Api\TarifController;
+use App\Http\Controllers\Api\TransaksiController;
 use App\Http\Controllers\Api\UserController;
 
 // Route Public
@@ -24,7 +26,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('areas', AreaParkirController::class);
 
     // Transaksi
-    Route::post('/parking/in', [\App\Http\Controllers\Api\TransaksiController::class, 'store']);   
-    Route::post('/parking/out', [\App\Http\Controllers\Api\TransaksiController::class, 'update']); 
-    Route::get('/parking', [\App\Http\Controllers\Api\TransaksiController::class, 'index']);      
+    Route::post('/parking/in', [TransaksiController::class, 'store']);   
+    Route::post('/parking/out', [TransaksiController::class, 'update']); 
+    Route::get('/parking', [TransaksiController::class, 'index']);      
+
+    // Member
+    Route::get('/member/kendaraan', [MemberController::class, 'index']);
+    Route::post('/member/kendaraan', [MemberController::class, 'store']);
+    Route::delete('/member/kendaraan/{id}', [MemberController::class, 'destroy']);
+    Route::get('/member/history', [MemberController::class, 'history']);
 });
