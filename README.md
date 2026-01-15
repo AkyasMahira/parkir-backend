@@ -1,59 +1,166 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Parkir Backend API
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Aplikasi backend berbasis REST API untuk sistem manajemen parkir. Dibangun menggunakan framework Laravel modern untuk menangani operasional parkir mulai dari pencatatan kendaraan masuk/keluar, manajemen tarif, membership, hingga pelaporan aktivitas.
 
-## About Laravel
+## 🚀 Fitur Utama
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+Berdasarkan struktur kode, berikut adalah fitur utama yang tersedia:
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+* **Autentikasi Aman**: Menggunakan **Laravel Sanctum** untuk token-based authentication.
+* **Transaksi Parkir**:
+    * Pencatatan Parkir Masuk (`Check-in`).
+    * Pencatatan Parkir Keluar (`Check-out`) dengan perhitungan durasi dan biaya otomatis.
+    * Dukungan berbagai metode pembayaran (Cash, QRIS, Transfer).
+* **Manajemen Tarif**: CRUD untuk mengatur tarif parkir berdasarkan jenis kendaraan.
+* **Manajemen Area**: Pengelolaan data area parkir/lokasi.
+* **Membership**: Sistem member untuk pengguna langganan, termasuk riwayat parkir member.
+* **Log Aktivitas**: Perekaman jejak aktivitas sistem (`LogAktivitas`).
+* **Laporan PDF**: Integrasi dengan `barryvdh/laravel-dompdf` untuk pembuatan laporan.
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## 🛠 Teknologi yang Digunakan
 
-## Learning Laravel
+Project ini dibangun menggunakan teknologi berikut:
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+* **Bahasa**: PHP ^8.2
+* **Framework**: Laravel 12.0
+* **Database**: MySQL / MariaDB
+* **Autentikasi**: Laravel Sanctum ^4.0
+* **PDF Generator**: Laravel DomPDF ^3.1
+* **Testing**: Pest PHP (via require-dev)
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+## 📋 Prasyarat Instalasi
 
-## Laravel Sponsors
+Sebelum memulai, pastikan sistem Anda memiliki:
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+* [PHP](https://www.php.net/) versi 8.2 atau lebih baru.
+* [Composer](https://getcomposer.org/).
+* Database (MySQL/MariaDB).
+* Terminal / Command Prompt.
 
-### Premium Partners
+## ⚙️ Cara Instalasi
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+Ikuti langkah-langkah berikut untuk menjalankan project di komputer lokal:
 
-## Contributing
+1.  **Clone Repository**
+    ```bash
+    git clone [https://github.com/username/parkir-backend.git](https://github.com/username/parkir-backend.git)
+    cd parkir-backend
+    ```
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+2.  **Install Dependencies**
+    ```bash
+    composer install
+    ```
 
-## Code of Conduct
+3.  **Konfigurasi Environment**
+    Salin file `.env.example` menjadi `.env`:
+    ```bash
+    cp .env.example .env
+    ```
+    Buka file `.env` dan sesuaikan konfigurasi database Anda:
+    ```ini
+    DB_CONNECTION=mysql
+    DB_HOST=127.0.0.1
+    DB_PORT=3306
+    DB_DATABASE=nama_database_parkir
+    DB_USERNAME=root
+    DB_PASSWORD=
+    ```
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+4.  **Generate App Key**
+    ```bash
+    php artisan key:generate
+    ```
 
-## Security Vulnerabilities
+5.  **Jalankan Migrasi Database**
+    ```bash
+    php artisan migrate
+    ```
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+6.  **Jalankan Server**
+    ```bash
+    php artisan serve
+    ```
+    Aplikasi akan berjalan di `http://localhost:8000`.
 
-## License
+## 📂 Susunan Project
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+Struktur utama direktori yang relevan dalam pengembangan API ini:
+
+```text
+parkir-backend/
+├── app/
+│   ├── Http/
+│   │   └── Controllers/
+│   │       └── Api/
+│   │           ├── AuthController.php      # Menangani Login/Logout
+│   │           ├── TransaksiController.php # Logika Masuk/Keluar Parkir
+│   │           ├── TarifController.php     # CRUD Tarif
+│   │           ├── MemberController.php    # Manajemen Member
+│   │           └── ...
+│   └── Models/
+│       ├── Transaksi.php   # Model Transaksi
+│       ├── Tarif.php       # Model Tarif
+│       ├── User.php        # Model User
+│       └── ...
+├── database/
+│   └── migrations/         # Struktur tabel database
+├── routes/
+│   └── api.php             # Definisi Endpoints API
+└── composer.json           # Dependensi project
+```
+
+## 📖 Contoh Penggunaan API
+Berikut adalah beberapa contoh endpoint yang tersedia (lihat routes/api.php untuk daftar lengkap).
+Header Wajib untuk Route Terproteksi: Authorization: Bearer <token_anda>
+
+1. Login (Public)
+URL: /api/login
+Method: POST
+
+```
+JSON
+
+{
+    "email": "admin@example.com",
+    "password": "password"
+}
+```
+
+2. Parkir Masuk (Check-in)
+URL: /api/parking/in
+Method: POST
+
+```
+JSON
+
+{
+    "plat_nomor": "B 1234 XYZ",
+    "jenis_kendaraan": "Mobil",
+    "id_area": 1
+}
+```
+
+3. Parkir Keluar (Check-out)
+URL: /api/parking/out
+Method: POST
+
+```
+JSON
+
+{
+    "plat_nomor": "B 1234 XYZ",
+    "metode_bayar": "cash"
+}
+```
+
+## 🤝 Kontribusi
+Kontribusi sangat dipersilakan! Jika Anda ingin berkontribusi pada project ini:
+Fork repository ini.
+Buat branch fitur baru (git checkout -b fitur-keren).
+Commit perubahan Anda (git commit -m 'Menambahkan fitur keren').
+Push ke branch tersebut (git push origin fitur-keren).
+Buat Pull Request.
+
+## 📄 Lisensi
+Project ini dilisensikan di bawah MIT License. Silakan lihat file LICENSE untuk informasi lebih lanjut.
