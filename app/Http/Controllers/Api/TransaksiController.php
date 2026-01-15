@@ -144,7 +144,7 @@ class TransaksiController extends Controller
 
     public function index(Request $request)
     {
-        $query = Transaksi::with(['user', 'area']);
+        $query = Transaksi::with(['user', 'area', 'kendaraan']);
 
         if ($request->status) {
             $query->where('status', $request->status);

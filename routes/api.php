@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AreaParkirController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\LogAktivitasController;
 use App\Http\Controllers\Api\MemberController;
 use App\Http\Controllers\Api\TarifController;
 use App\Http\Controllers\Api\TransaksiController;
@@ -35,4 +36,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/member/kendaraan', [MemberController::class, 'store']);
     Route::delete('/member/kendaraan/{id}', [MemberController::class, 'destroy']);
     Route::get('/member/history', [MemberController::class, 'history']);
+
+    // Log Aktivitas
+    Route::get('/logs', [LogAktivitasController::class, 'index']);
 });

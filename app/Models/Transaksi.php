@@ -36,4 +36,9 @@ class Transaksi extends Model
     {
         return $this->belongsTo(AreaParkir::class, 'id_area', 'id_area');
     }
+
+    public function kendaraan()
+    {
+        return $this->hasOne(Kendaraan::class, 'plat_nomor', 'plat_nomor');
+    }
 }
