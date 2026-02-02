@@ -5,252 +5,254 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Transaksi;
 use App\Models\AreaParkir;
-use App\Models\Tarif;
 use App\Models\LogAktivitas;
-use App\Services\CashiService; 
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
+use App\Models\Tarif;
+use App\Services\CashiService;
 use Carbon\Carbon;
+use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 class TransaksiController extends Controller
 {
 
+    private function formatRupiah($angka)
+    {
+        return "Rp " . number_format($angka, 0, ',', '.');
+    }
+    // CHECK IN - Generate Struk ID
     public function store(Request $request)
     {
         $request->validate([
-            'plat_nomor' => 'required|string|max:15',
-            'jenis_kendaraan' => 'required|string|exists:tb_tarif,jenis_kendaraan',
+            'plat_nomor' => 'required',
+            'jenis_kendaraan' => 'required',
             'id_area' => 'required|exists:tb_area_parkir,id_area',
         ]);
 
-        try {
-            return DB::transaction(function () use ($request) {
-                // Lock area biar gak race condition
-                $area = AreaParkir::where('id_area', $request->id_area)->lockForUpdate()->first();
-
-                if ($area->terisi >= $area->kapasitas) {
-                    throw new \Exception('Area parkir penuh!', 400);
-                }
-
-                // Cek double check-in
-                $isParked = Transaksi::where('plat_nomor', $request->plat_nomor)
-                    ->where('status', 'masuk')
-                    ->exists();
-
-                if ($isParked) {
-                    throw new \Exception('Kendaraan sudah parkir (belum checkout).', 400);
-                }
-
-                $transaksi = Transaksi::create([
-                    'id_user' => $request->user()->id_user, // Petugas yang input
-                    'id_area' => $request->id_area,
-                    'plat_nomor' => strtoupper($request->plat_nomor),
-                    'jenis_kendaraan' => $request->jenis_kendaraan,
-                    'waktu_masuk' => Carbon::now(),
-                    'status' => 'masuk',
-                    'metode_bayar' => 'cash', // Default awal
-                    'status_pembayaran' => 'pending' // Default awal
-                ]);
-
-                // Update Slot
-                $area->increment('terisi');
-
-                // Catat Log
-                LogAktivitas::create([
-                    'id_user' => $request->user()->id_user,
-                    'aktivitas' => "Input Masuk: {$transaksi->plat_nomor} ({$transaksi->jenis_kendaraan})",
-                ]);
-
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Berhasil Check-in',
-                    'data' => $transaksi
-                ], 201);
-            });
-        } catch (\Exception $e) {
-            return response()->json(['success' => false, 'message' => $e->getMessage()], 400);
+        $area = AreaParkir::find($request->id_area);
+        if ($area->terisi >= $area->kapasitas) {
+            return response()->json(['success' => false, 'message' => 'Area penuh'], 400);
         }
-    }
 
-    // --- 2. CHECK OUT (KENDARAAN KELUAR & BAYAR) ---
-    public function update(Request $request)
-    {
-        $request->validate([
-            'plat_nomor' => 'required_without:id_transaksi',
-            'id_transaksi' => 'required_without:plat_nomor',
-            'metode_bayar' => 'required|in:cash,qris' // Validasi tambahan
+        $strukId = 'TRX-' . strtoupper(Str::random(8));
+
+        $transaksi = Transaksi::create([
+            'struk_id' => $strukId,
+            'id_user' => $request->user()->id_user,
+            'id_area' => $request->id_area,
+            'plat_nomor' => strtoupper($request->plat_nomor),
+            'jenis_kendaraan' => $request->jenis_kendaraan,
+            'waktu_masuk' => now(),
+            'status' => 'parkir',
         ]);
 
-        try {
-            // Cari Data Transaksi
-            $query = Transaksi::where('status', 'masuk');
-            if ($request->id_transaksi) {
-                $query->where('id_transaksi', $request->id_transaksi);
-            } else {
-                $query->where('plat_nomor', $request->plat_nomor);
-            }
-            $transaksi = $query->first();
+        $area->increment('terisi');
 
-            if (!$transaksi) {
-                return response()->json(['message' => 'Data parkir tidak ditemukan atau sudah keluar.'], 404);
-            }
-
-            // Hitung Durasi & Biaya
-            $waktuMasuk = Carbon::parse($transaksi->waktu_masuk);
-            $waktuKeluar = Carbon::now();
-            $selisihMenit = $waktuMasuk->diffInMinutes($waktuKeluar);
-
-            $durasiJam = ($selisihMenit <= 0) ? 1 : ceil($selisihMenit / 60);
-
-            $tarifMaster = Tarif::where('jenis_kendaraan', $transaksi->jenis_kendaraan)->first();
-            $hargaPerJam = $tarifMaster ? $tarifMaster->tarif_per_jam : 2000;
-            $biayaTotal = (int) ($durasiJam * $hargaPerJam);
-
-            // Update Data Dasar Transaksi
-            $transaksi->waktu_keluar = $waktuKeluar;
-            $transaksi->durasi_jam = $durasiJam;
-            $transaksi->biaya_total = $biayaTotal;
-            $transaksi->status = 'keluar';
-            $transaksi->metode_bayar = $request->metode_bayar;
-
-            // --- A. JIKA BAYAR PAKAI QRIS (CASHI) ---
-            if ($request->metode_bayar === 'qris') {
-                $cashi = new CashiService();
-                $orderId = 'PARK-' . $transaksi->id_transaksi . '-' . time();
-
-                // Generate QR ke API Cashi
-                $result = $cashi->createOrder($orderId, $biayaTotal);
-
-                if ($result['success']) {
-                    $dataCashi = $result['data'];
-
-                    // Simpan data QRIS ke DB
-                    $transaksi->status_pembayaran = 'pending'; // Belum lunas
-                    $transaksi->external_id = $orderId;
-                    $transaksi->biaya_total = $dataCashi['amount']; // Update nominal unik (misal 5023)
-                    $transaksi->qris_content = $dataCashi['qrUrl']; // Simpan gambar QR
-                    $transaksi->save();
-
-                    // Return Data QR ke Frontend
-                    return response()->json([
-                        'success' => true,
-                        'is_qris' => true,
-                        'qr_image' => $dataCashi['qrUrl'],
-                        'nominal' => $dataCashi['amount'],
-                        'order_id' => $orderId,
-                        'message' => 'Silakan scan QRIS',
-                        'data' => $transaksi
-                    ]);
-                } else {
-                    throw new \Exception('Gagal membuat QRIS: ' . $result['message']);
-                }
-            }
-
-            // --- B. JIKA BAYAR CASH ---
-            else {
-                DB::transaction(function () use ($transaksi, $request, $biayaTotal) {
-                    $transaksi->status_pembayaran = 'paid';
-                    $transaksi->save();
-
-                    // Kurangi Slot Parkir
-                    $area = AreaParkir::where('id_area', $transaksi->id_area)->lockForUpdate()->first();
-                    if ($area && $area->terisi > 0) {
-                        $area->decrement('terisi');
-                    }
-
-                    // Log Aktivitas
-                    LogAktivitas::create([
-                        'id_user' => $request->user()->id_user,
-                        'aktivitas' => "Proses Keluar (CASH): {$transaksi->plat_nomor}. Total: Rp " . number_format($biayaTotal),
-                    ]);
-                });
-
-                return response()->json([
-                    'success' => true,
-                    'is_qris' => false,
-                    'message' => 'Transaksi Cash Selesai',
-                    'data' => $transaksi
-                ]);
-            }
-        } catch (\Exception $e) {
-            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
-        }
-    }
-
-    // --- 3. GET LIST TRANSAKSI ---
-    public function index(Request $request)
-    {
-        // Load relasi user, area, dan kendaraan (untuk cek member)
-        $query = Transaksi::with(['user', 'area', 'kendaraan']);
-
-        if ($request->status) {
-            $query->where('status', $request->status);
-        }
-
-        $data = $query->orderBy('id_transaksi', 'desc')->get();
+        // --- IMPLEMENTASI LOG AUDIT (CHECK-IN) ---
+        LogAktivitas::create([
+            'id_user' => $request->user()->id_user,
+            'aktivitas' => "Check-in: Petugas memproses kendaraan {$transaksi->plat_nomor} di {$area->nama_area}",
+            'waktu_aktivitas' => now(),
+        ]);
 
         return response()->json([
             'success' => true,
-            'data' => $data
+            'message' => 'Check-in berhasil',
+            'data' => $transaksi->load('area'),
+            'struk_id' => $strukId,
         ]);
     }
 
-    // --- 4. CEK STATUS QRIS (POLLING) ---
-    public function checkStatus($orderId)
+    public function update(Request $request)
     {
-        $transaksi = Transaksi::where('external_id', $orderId)->first();
+        $request->validate([
+            'struk_id' => 'required_without:foto_identitas',
+            'foto_identitas' => 'required_without:struk_id|image|max:2048',
+            'metode_bayar' => 'required|in:cash,qris',
+        ]);
+
+        if ($request->struk_id) {
+            $transaksi = Transaksi::where('struk_id', $request->struk_id)
+                ->where('status', 'parkir')
+                ->first();
+        } else {
+            $fotoPath = $request->file('foto_identitas')->store('identitas', 'public');
+            $transaksi = Transaksi::where('status', 'parkir')
+                ->orderBy('waktu_masuk', 'desc')
+                ->first();
+
+            if ($transaksi) {
+                $transaksi->update(['foto_identitas' => $fotoPath]);
+            }
+        }
 
         if (!$transaksi) {
             return response()->json(['success' => false, 'message' => 'Transaksi tidak ditemukan'], 404);
         }
 
-        // Jika di DB kita sudah paid, return langsung
-        if ($transaksi->status_pembayaran == 'paid') {
-            return response()->json(['success' => true, 'status' => 'paid']);
+        $waktuMasuk = Carbon::parse($transaksi->waktu_masuk);
+        $waktuKeluar = now();
+        $selisihMenit = $waktuMasuk->diffInMinutes($waktuKeluar);
+        $durasi = $selisihMenit <= 0 ? 1 : ceil($selisihMenit / 60);
+
+        $tarif = Tarif::where('jenis_kendaraan', $transaksi->jenis_kendaraan)->first();
+        $biaya = $durasi * ($tarif ? $tarif->tarif_per_jam : 0);
+
+        $transaksi->update([
+            'waktu_keluar' => $waktuKeluar,
+            'durasi_jam' => $durasi,
+            'biaya_total' => $biaya,
+            'metode_bayar' => $request->metode_bayar,
+            'status' => $request->metode_bayar === 'cash' ? 'selesai' : 'menunggu_bayar',
+        ]);
+
+        $transaksi->area->decrement('terisi');
+
+        // --- IMPLEMENTASI LOG AUDIT (CHECK-OUT) ---
+        LogAktivitas::create([
+            'id_user' => $request->user()->id_user,
+            'aktivitas' => "Check-out: Petugas memproses pembayaran {$transaksi->plat_nomor} sebesar " . $this->formatRupiah($biaya),
+            'waktu_aktivitas' => now(),
+        ]);
+
+        if ($request->metode_bayar === 'qris') {
+            try {
+                $qrData = $this->generateQRIS($transaksi);
+                return response()->json([
+                    'success' => true,
+                    'is_qris' => true,
+                    'qr_image' => $qrData['qr_image'],
+                    'order_id' => $qrData['order_id'],
+                    'nominal' => $qrData['nominal'],
+                    'data' => $transaksi,
+                ]);
+            } catch (\Exception $e) {
+                return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+            }
         }
 
-        // Jika belum, cek manual ke Cashi
+        return response()->json([
+            'success' => true,
+            'is_qris' => false,
+            'message' => 'Checkout berhasil',
+            'data' => $transaksi,
+        ]);
+    }
+
+    private function generateQRIS($transaksi)
+    {
+        $cashi = new CashiService();
+        $orderId = 'ORD-' . $transaksi->id_transaksi . '-' . time();
+
+        // Create order ke Cashi
+        $result = $cashi->createOrder($orderId, $transaksi->biaya_total);
+
+        if ($result['success']) {
+            $dataCashi = $result['data'];
+
+            // Update nominal jika ada kode unik dari Cashi
+            $transaksi->update([
+                'order_id' => $orderId,
+                'biaya_total' => $dataCashi['amount']
+            ]);
+
+            return [
+                'qr_image' => $dataCashi['qrUrl'],
+                'order_id' => $orderId,
+                'nominal'  => $dataCashi['amount']
+            ];
+        } else {
+            throw new \Exception('Gagal generate QRIS: ' . ($result['message'] ?? 'Error'));
+        }
+    }
+
+    public function checkStatus($orderId)
+    {
+        $transaksi = Transaksi::where('order_id', $orderId)->first();
+
+        if (!$transaksi) {
+            return response()->json(['status' => 'not_found'], 404);
+        }
+
+        if ($transaksi->status === 'selesai') {
+            return response()->json(['status' => 'paid']);
+        }
+
+        // Cek status real ke Cashi
         $cashi = new CashiService();
         $res = $cashi->checkStatus($orderId);
 
-        if (isset($res['status']) && $res['status'] == 'SETTLED') {
-            // Update jadi paid
-            $transaksi->status_pembayaran = 'paid';
-            $transaksi->save();
-
-            // Slot parkir dikurangi (karena sudah lunas, mobil boleh keluar)
-            AreaParkir::where('id_area', $transaksi->id_area)->decrement('terisi');
-
-            return response()->json(['success' => true, 'status' => 'paid']);
+        if (isset($res['status']) && ($res['status'] == 'SETTLED' || $res['status'] == 'PAID')) {
+            $transaksi->update(['status' => 'selesai']);
+            return response()->json(['status' => 'paid']);
         }
 
-        return response()->json(['success' => true, 'status' => 'pending']);
+        return response()->json(['status' => 'pending']);
     }
 
-    // --- 5. CETAK STRUK ---
+    // Cetak Struk
     public function cetakStruk($id)
     {
-        $trx = Transaksi::with(['user', 'area', 'kendaraan'])->find($id);
+        $transaksi = Transaksi::with(['user', 'area'])->find($id);
 
-        if (!$trx) {
-            return response()->json(['success' => false, 'message' => 'Data tidak ditemukan'], 404);
+        if (!$transaksi) {
+            return response()->json(['message' => 'Tidak ditemukan'], 404);
         }
 
         return response()->json([
             'success' => true,
             'data' => [
-                'struk_id' => '#TRX-' . $trx->id_transaksi,
-                'waktu_masuk' => date('d-m-Y H:i', strtotime($trx->waktu_masuk)),
-                'waktu_keluar' => $trx->waktu_keluar ? date('d-m-Y H:i', strtotime($trx->waktu_keluar)) : '-',
-                'durasi' => $trx->durasi_jam . ' Jam',
-                'plat_nomor' => $trx->plat_nomor,
-                'jenis' => strtoupper($trx->jenis_kendaraan),
-                'biaya' => $trx->biaya_total,
-                'petugas' => $trx->user ? $trx->user->nama_lengkap : 'Sistem',
-                'area' => $trx->area->nama_area,
-                'metode_bayar' => strtoupper($trx->metode_bayar),
-                'status_bayar' => strtoupper($trx->status_pembayaran),
-                'member' => $trx->kendaraan ? $trx->kendaraan->pemilik : '-'
+                'struk_id' => $transaksi->struk_id,
+                'plat_nomor' => $transaksi->plat_nomor,
+                'waktu_masuk' => $transaksi->waktu_masuk->format('d/m/Y H:i'),
+                'waktu_keluar' => $transaksi->waktu_keluar ? $transaksi->waktu_keluar->format('d/m/Y H:i') : '-',
+                'durasi' => $transaksi->durasi_jam . ' jam',
+                'biaya' => $transaksi->biaya_total,
+                'petugas' => $transaksi->user->nama_lengkap,
+                'metode_bayar' => $transaksi->metode_bayar ?? '-',
+                'status_bayar' => $transaksi->status,
+            ],
+        ]);
+    }
+
+    // List transaksi
+    // List transaksi
+    public function index(Request $request)
+    {
+        // Load relasi user dan area
+        $query = Transaksi::with(['area', 'user']);
+
+        // Filter Server-side (Opsional, jika ingin pindah dari client-side filtering)
+        if ($request->has('status') && $request->status != 'all') {
+            // Mapping status sederhana jika diperlukan
+            $status = $request->status;
+            if ($status === 'masuk') $status = 'parkir';
+
+            $query->where('status', $status);
+        }
+
+        // Pencarian Server-side (Opsional)
+        if ($request->has('q')) {
+            $query->where('plat_nomor', 'like', '%' . $request->q . '%');
+        }
+
+        // Sorting default: Terbaru paling atas
+        $query->orderBy('waktu_masuk', 'desc');
+
+        // Check limit dari request frontend, default 50
+        // Frontend mengirim ?limit=500 untuk kebutuhan tabel riwayat
+        $limit = $request->input('limit', 50);
+
+        // Gunakan paginate agar response structure konsisten { data: [...], links: ... }
+        $data = $query->paginate($limit);
+
+        return response()->json([
+            'success' => true,
+            'data' => $data->items(), // Mengambil array datanya saja
+            'meta' => [ // Info tambahan untuk pagination server-side kedepannya
+                'current_page' => $data->currentPage(),
+                'last_page' => $data->lastPage(),
+                'total' => $data->total(),
+                'per_page' => $data->perPage()
             ]
         ]);
     }

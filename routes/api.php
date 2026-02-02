@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\TarifController;
 use App\Http\Controllers\Api\AreaParkirController;
+use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\TransaksiController;
 use App\Http\Controllers\Api\OwnerController;
 use App\Http\Controllers\Api\LogAktivitasController;
@@ -16,6 +17,7 @@ Route::post('/webhook/cashi', [WebhookController::class, 'handleCashi']);
 
 // Protected
 Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/admin/dashboard-stats', [DashboardController::class, 'index']);
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
 
@@ -26,7 +28,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Transaksi
     Route::post('/parking/in', [TransaksiController::class, 'store']);
     Route::post('/parking/out', [TransaksiController::class, 'update']);
-    Route::get('/parking', [TransaksiController::class, 'index']);
+    Route::get('/transaksi', [TransaksiController::class, 'index']);
     Route::get('/transaksi/status/{orderId}', [TransaksiController::class, 'checkStatus']);
     Route::get('/transaksi/struk/{id}', [TransaksiController::class, 'cetakStruk']);
 
