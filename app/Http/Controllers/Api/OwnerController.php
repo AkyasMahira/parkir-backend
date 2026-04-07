@@ -88,7 +88,7 @@ class OwnerController extends Controller
         ]);
     }
 
-    // 3. GRAFIK / ANALISA PENDAPATAN (Opsional jika nanti butuh grafik)
+    // 3. GRAFIK / ANALISA PENDAPATAN
     public function pendapatan(Request $request)
     {
         $bulan = $request->bulan ?? date('Y-m'); // Format YYYY-MM
@@ -113,6 +113,56 @@ class OwnerController extends Controller
             'total_pendapatan' => $totalPendapatan,
             'total_transaksi' => $totalTransaksi,
             'detail_harian' => $data
+        ]);
+    }
+
+    public function export(Request $request)
+    {
+        $query = Transaksi::with(['user:id_user,nama_lengkap', 'area:id_area,nama_area'])
+            ->where('status', 'selesai')
+            ->orderBy('waktu_keluar', 'desc');
+
+        // Filter tanggal
+        if ($request->filled('tanggal_mulai')) {
+            $query->whereDate('waktu_keluar', '>=', $request->tanggal_mulai);
+        }
+
+        if ($request->filled('tanggal_akhir')) {
+            $query->whereDate('waktu_keluar', '<=', $request->tanggal_akhir);
+        }
+
+        $data = $query->get();
+
+        // Header CSV
+        $headers = [
+            'Plat Nomor',
+            'Waktu Keluar',
+            'Durasi (Jam)',
+            'Lokasi',
+            'Petugas',
+            'Total Biaya'
+        ];
+
+        $callback = function () use ($data, $headers) {
+            $file = fopen('php://output', 'w');
+            fputcsv($file, $headers);
+
+            foreach ($data as $t) {
+                fputcsv($file, [
+                    $t->plat_nomor,
+                    $t->waktu_keluar,
+                    $t->durasi_jam,
+                    $t->area->nama_area,
+                    $t->user->nama_lengkap,
+                    $t->biaya_total,
+                ]);
+            }
+
+            fclose($file);
+        };
+
+        return response()->streamDownload($callback, 'laporan-pendapatan.csv', [
+            'Content-Type' => 'text/csv',
         ]);
     }
 }

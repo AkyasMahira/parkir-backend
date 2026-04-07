@@ -36,6 +36,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/owner/pendapatan', [OwnerController::class, 'pendapatan']);
     Route::get('/owner/laporan', [OwnerController::class, 'laporan']);
     Route::get('/owner/dashboard', [OwnerController::class, 'dashboard']);
+    Route::get('/owner/laporan/export', [OwnerController::class, 'export']);
 
     // Log
     Route::get('/logs', [LogAktivitasController::class, 'index']);
